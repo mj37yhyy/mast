@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/mitchellh/go-homedir"
+	"github.com/mj37yhyy/mast/pkg/kubernetes"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
@@ -30,7 +31,8 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/config)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "kubernetes config file (default is $HOME/.kube/config)")
+	kubernetes.InitKubernetesClient(cfgFile)
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(deployCmd)

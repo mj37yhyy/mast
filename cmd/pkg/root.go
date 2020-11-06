@@ -2,23 +2,24 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/mitchellh/go-homedir"
 	"github.com/mj37yhyy/mast/pkg/kubernetes"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"os"
 )
 
 var (
 	cfgFile string
 	rootCmd = &cobra.Command{
-		Use:               "embctl",
-		Short:             "embassy control interface.",
+		Use:               "mast",
+		Short:             "mast control interface.",
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
-		Long: `embassy configuration command line utility for service operators to
-debug and diagnose their embassy.
+		Long: `mast configuration command line utility for service operators to
+debug and diagnose their istio.
 `,
+		Run: func(cmd *cobra.Command, args []string) {
+			kubernetes.InitKubernetesClient(cfgFile)
+		},
 		//PersistentPreRunE: configureLogging,
 	}
 )
@@ -29,10 +30,8 @@ func Execute() error {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
-
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "kubernetes config file (default is $HOME/.kube/config)")
-	kubernetes.InitKubernetesClient(cfgFile)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "",
+		"kubernetes config file (default is $HOME/.kube/config)")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(deployCmd)
@@ -41,27 +40,4 @@ func init() {
 func er(msg interface{}) {
 	fmt.Println("Error:", msg)
 	os.Exit(1)
-}
-
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			er(err)
-		}
-
-		// Search config in home directory with name ".embassy" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".embassy")
-	}
-
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
 }

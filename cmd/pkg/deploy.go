@@ -33,8 +33,7 @@ var (
 				createOrUpdateService()
 				return
 			} else {
-				err := cmd.Help()
-				if err != nil {
+				if err := cmd.Help(); err != nil {
 					panic(err)
 				}
 				return

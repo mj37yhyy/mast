@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	k8s "github.com/mj37yhyy/mast/pkg/kubernetes"
 	"github.com/spf13/cobra"
@@ -28,15 +29,20 @@ var (
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(image) != 0 && len(serviceName) != 0 && len(serviceVersion) != 0 {
-				initPorts()
-				createDeployment()
-				createOrUpdateService()
-				return
-			} else {
-				if err := cmd.Help(); err != nil {
-					panic(err)
+				if !printErr(cmd, initPorts) {
+					return
+				}
+				if !printErr(cmd, createDeployment) {
+					return
+				}
+				if !printErr(cmd, createOrUpdateService) {
+					return
 				}
 				return
+			} else {
+				if !printErr(cmd, cmd.Help) {
+					return
+				}
 			}
 		},
 	}
@@ -57,9 +63,12 @@ func init() {
 	deployCmd.PersistentFlags().StringVar(&serviceVersion, "version", "", "deployment version for istio")
 }
 
-func initPorts() {
+func initPorts() error {
 	for i := range ports {
 		portStringArray := strings.Split(ports[i], ":")
+		if len(portStringArray) != 2 {
+			return errors.New("ports format error.")
+		}
 		var portInt32Array []int32
 
 		p, err := strconv.ParseInt(portStringArray[0], 10, 32)
@@ -76,9 +85,10 @@ func initPorts() {
 
 		Ports = append(Ports, portInt32Array)
 	}
+	return nil
 }
 
-func createDeployment() {
+func createDeployment() error {
 	deploymentsClient := k8s.Clientset.AppsV1().Deployments(namespace)
 	var dPorts []apiv1.ContainerPort
 	for i := range Ports {
@@ -123,13 +133,14 @@ func createDeployment() {
 	fmt.Println("Creating deployment...")
 	result, err := deploymentsClient.Create(deployment)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	fmt.Printf("Created deployment %q.\n", result.GetObjectMeta().GetName())
 
+	return nil
 }
 
-func createOrUpdateService() {
+func createOrUpdateService() error {
 	svcClient := k8s.Clientset.CoreV1().Services(namespace)
 
 	var sPorts []apiv1.ServicePort
@@ -159,9 +170,18 @@ func createOrUpdateService() {
 	if err != nil {
 		svc, err = svcClient.Update(svc)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
 
 func int32Ptr(i int32) *int32 { return &i }
+
+func printErr(cmd *cobra.Command, _func func() error) bool {
+	if err := _func(); err != nil {
+		cmd.PrintErr(err)
+		return false
+	}
+	return true
+}

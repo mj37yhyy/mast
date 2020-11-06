@@ -17,7 +17,7 @@ var (
 
 func init() {
 	if err := InitKubernetesClient(CfgFile); err != nil {
-		fmt.Printf("Please set kubernetes config file to %s or call \"mast config /config\". \n", CfgFile)
+		fmt.Printf("Please copy kubernetes config file to %s or call \"mast config <your_path>/config\". \n", CfgFile)
 	}
 }
 

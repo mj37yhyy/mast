@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"fmt"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -15,19 +16,22 @@ var (
 )
 
 func init() {
-	InitKubernetesClient(CfgFile)
+	if err := InitKubernetesClient(CfgFile); err != nil {
+		fmt.Printf("Please set kubernetes config file to %s or call \"mast config /config\". \n", CfgFile)
+	}
 }
 
-func InitKubernetesClient(cfgFile string) {
+func InitKubernetesClient(cfgFile string) error {
 	if len(cfgFile) == 0 {
 		cfgFile = CfgFile
 	}
 	RestConfig, err := clientcmd.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	Clientset, err = kubernetes.NewForConfig(RestConfig)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }

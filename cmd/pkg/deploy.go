@@ -1,13 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/mj37yhyy/mast/pkg/istio"
 	k8s "github.com/mj37yhyy/mast/pkg/kubernetes"
 	"github.com/spf13/cobra"
+	networkingv1beta1 "istio.io/api/networking/v1beta1"
+	"istio.io/client-go/pkg/apis/networking/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"strings"
@@ -29,16 +34,12 @@ var (
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(image) != 0 && len(serviceName) != 0 && len(serviceVersion) != 0 {
-				if !printErr(cmd, initPorts) {
+				if !printErr(cmd, initPorts) ||
+					!printErr(cmd, createDeployment) ||
+					!printErr(cmd, createOrUpdateService) ||
+					!printErr(cmd, createOrUpdateDestinationRule) {
 					return
 				}
-				if !printErr(cmd, createDeployment) {
-					return
-				}
-				if !printErr(cmd, createOrUpdateService) {
-					return
-				}
-				return
 			} else {
 				if !printErr(cmd, cmd.Help) {
 					return
@@ -131,7 +132,7 @@ func createDeployment() error {
 
 	// Create Deployment
 	fmt.Println("Creating deployment...")
-	result, err := deploymentsClient.Create(deployment)
+	result, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -150,7 +151,6 @@ func createOrUpdateService() error {
 				IntVal: Ports[i][0],
 			},
 			Port: Ports[i][1],
-			//NodePort: nodePort,
 		})
 	}
 
@@ -166,9 +166,49 @@ func createOrUpdateService() error {
 		},
 	}
 
-	svc, err := svcClient.Create(svc)
+	svc, err := svcClient.Create(context.TODO(), svc, metav1.CreateOptions{})
 	if err != nil {
-		svc, err = svcClient.Update(svc)
+		svc, err = svcClient.Update(context.TODO(), svc, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createOrUpdateDestinationRule() error {
+	istioClientset, err := istio.GetIstioClientset()
+	if err != nil {
+		return err
+	}
+	dri := istioClientset.NetworkingV1beta1().DestinationRules(namespace)
+
+	drName := serviceName + "." + namespace
+	dr := &v1beta1.DestinationRule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: serviceName,
+		},
+		Spec: networkingv1beta1.DestinationRule{
+			Host: drName,
+			Subsets: []*networkingv1beta1.Subset{
+				{
+					Name: serviceVersion,
+					Labels: map[string]string{
+						version: serviceVersion,
+					},
+				},
+			},
+		},
+	}
+
+	dr, err = dri.Create(context.TODO(), dr, metav1.CreateOptions{})
+	if err != nil {
+		pdr := fmt.Sprintf(`spec:
+  subsets:
+  - name: %s
+    labels:
+      version: %s`, serviceVersion, serviceVersion)
+		dr, err = dri.Patch(context.TODO(), drName, types.MergePatchType, []byte(pdr), metav1.PatchOptions{})
 		if err != nil {
 			return err
 		}
